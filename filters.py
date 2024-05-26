@@ -56,11 +56,13 @@ class imu_filter:
                 #print("not")
             else:
                 #not moveing a lot
-                new_data.append(new_data[-1]*0.7) 
+                new_data.append(new_data[-1]*0.7)  
     
-    #stationary the velocity(?) if the value is too small
+    #assume the velocity doesn't change if the detected changing value is too small
     def is_stationary(self, gyro_x, gyro_y, gyro_z):
-        threshold = 15 #rotation sensitivity
+        #rotation sensitivity
+        threshold = 15 
+        
         if abs(gyro_x) < threshold and abs(gyro_y) < threshold and abs(gyro_z) < threshold:
             return True
         else:

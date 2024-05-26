@@ -8,12 +8,12 @@ import matplotlib.pyplot as plt
 import keyboard
 import numpy as np
 
-import threading
-import insruct
+# import threading
+# import insruct
 
 
-from diy_controller_code.imu_data import imu #raw data read
-from diy_controller_code.filters import imu_filter, calculation #filters and calculation
+from imu_data import imu #raw data read
+from filters import imu_filter, calculation #filters and calculation
 from crc_verify import CRC #communication security
 
 read = imu()
@@ -33,7 +33,8 @@ def imu_update():
     
 if __name__=='__main__':
     
-    ser = serial.Serial('COM3', 115200)
+    ser = serial.Serial('COM13', 115200)
+    send = serial.Serial('COM14', 115200)
     #raspberry pi
     # uart_com = serial.Serial('/dev/ttyUSB1', 115200) #uart connection
     # IMU = serial.Serial('/dev/ttyUSB0', 115200) #uart connection
@@ -56,10 +57,9 @@ if __name__=='__main__':
     
     #diy controller
     cmd_id = 0x0302 #two byte H
-    data = b'\x00' * 29
     
-    timer = 500
-    while(1):
+    timer = True
+    while(timer):
         datahex = ser.read(33)
         read.DueData(datahex)
         
@@ -69,6 +69,10 @@ if __name__=='__main__':
         angle = read.get_angle()
         gyro = read.get_gyro()
         
+        # print(gyro,"\n")
+        # print(angle,"\n")
+        # print(gyro)
+        
         #remove gravity
         acc = filters.remove_gravity1(acc,q)
         
@@ -76,6 +80,7 @@ if __name__=='__main__':
         if(keyboard.is_pressed('q')):
             # print(acc[0])
             #deadzone and update acceleration
+            
             stable = filters.is_stationary(gyro[0], gyro[1], gyro[2])
             
             imu_filter.zero_update(acc[0], a_x, stable)
@@ -96,10 +101,13 @@ if __name__=='__main__':
                 cal.addition(v_x, delat_v_x)
                 cal.addition(v_y, delat_v_y)
                 cal.addition(v_z, delat_v_z)
-                # print(v_x[-1], v_y[-1],v_z[-1], end = "\r")
+                
+                bit_x = struct.pack("fff", v_x[-1], v_y[-1],v_z[-1])
+                
+                # print(bit_x )
             
         else:
-            print("waiting", end="\r")
+            # print("waiting", end="\r")
             a_x.append(0.0)
             a_y.append(0.0)
             a_z.append(0.0)
@@ -107,23 +115,32 @@ if __name__=='__main__':
             v_y.append(0.0)
             v_z.append(0.0)
 
-        print(v_x[-1], v_y[-1],v_z[-1],"               " ,end = "\r")        
-        timer -=1
+        print(v_x[-1], v_y[-1],v_z[-1], angle[0],angle[1],angle[2] , "\n")        
+        # timer -=1
         
         #seril communication
         
         #5 bit header
         head = struct.pack("<BHB", SOF, data_length, seq)
         
-        #CRC8 add
+        
         # test.reset()
-        head_length = 5       
+        head_length = 5
+        
+        #CRC8 add
         head = crc.append_CRC8_check_sum(head, 5)
         # append_CRC8_check_sum(head, 5)
         # print("head:", len(head))
+        
+        #temp length filling for now, change later
         command = 0x1111
         #ID 2 bytes + command 30 bytes
-        buff = head + struct.pack("<HffffffHHH",cmd_id,v_x[-1],v_y[1],v_z[-1],angle[0],angle[1],angle[2],command,0x0101,0x0101)
+        #Send the latest calculated 3-axis velocity, angles, and custom command
+        # print(v_x[-1])
+        send_command = struct.pack("<HffffffHHH",cmd_id,v_x[-1],v_y[-1],v_z[-1],angle[0],angle[1],angle[2],command,0x0101,0x0101) 
+        buff = head + send_command
+        
+        print(send_command)
         
         #crc16 add, use random from the table
         buff = crc.append_CRC16_check_sum(buff,39)
@@ -131,7 +148,7 @@ if __name__=='__main__':
         # buff = buff + struct.pack("<H", crc16)
         
         #send data to C board through referee system, more details refer to read.md
-        # uart_com.write(buff)
+        send.write(buff)
         
 
     #Graphing
