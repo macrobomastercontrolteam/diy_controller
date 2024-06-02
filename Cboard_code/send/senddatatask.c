@@ -15,7 +15,7 @@ void Get_Data();
 float low_pass_filter(float acc, float acc_pre, float coeff);
 float Round_Function(float number);
 float Complemenraty_Fielter(float acc, float gyro, float prev_comp, float dt);
-
+float integrate_composite(float pre, float cur);
 
 float magnitude (float x, float y, float z, float w);
 void gravity();
@@ -35,13 +35,17 @@ fp32 acc_z, acc_z_pre;
 
 fp32 acc_x_f, acc_y_f, acc_z_f;
 
+fp32 v_x, v_y, v_z;
+fp32 v_x_pre, v_y_pre, v_z_pre;
+
+fp32 d_x, d_y, d_z;
+fp32 total_x, total_y, total_z;
+
 fp32 mag_x, mag_y, mag_z;
-
 fp32 gravity_x, gravity_y, gravity_z;
-
 fp32 gyro_x , gyro_y, gyro_z;
 
-bool_t stable;
+bool_t stable_x, stable_y, stable_z;
 
 fp32 quat_w, quat_x, quat_y, quat_z;
 
@@ -49,7 +53,7 @@ fp32 comp_pitch, comp_pitch_prev;
 fp32 comp_row, comp_row_prev;
 
 
-float dt = 1.0f / 0.3f;
+float dt = 0.034f;
 float cutoff;
 float filter;
 float RC;
@@ -70,7 +74,30 @@ void StartSendDataTask(void const *argument)
         Get_Data();
         
         stable_check();
+        
+        v_x_pre = v_x;
+        v_x = integrate_composite(acc_x_pre, acc_x);
+        d_x = integrate_composite(v_x_pre, v_x);
 
+        v_y_pre = v_y;
+        v_y = integrate_composite(acc_y_pre, acc_y);
+        d_y = integrate_composite(v_y_pre, v_y);
+
+        v_z_pre = v_z;
+        v_z = integrate_composite(acc_z_pre, acc_z);
+        d_z = integrate_composite(v_z_pre, v_z);
+
+        if( ! stable_x){
+            total_x += d_x;
+        }
+
+        if( ! stable_y){
+            total_y += d_y;
+        }
+
+        if( ! stable_z){
+            total_z += d_z;
+        }
 
         
         //Package data
@@ -117,9 +144,9 @@ static void Data_Concatenation(uint8_t *data, uint16_t data_lenth)
 
 float low_pass_filter(float acc, float acc_pre, float coeff){
     // float coeff = 0.8f;
-    acc = coeff * acc + (1.0f -coeff) * acc_pre;
+    acc = coeff * acc + (1.0f - coeff) * acc_pre;
 
-    return fabs(acc) < 6.0f ? acc : 0;
+    return fabs(acc) <= 9.8f ? acc : 0;
 }
 
 void Get_Data(){
@@ -166,7 +193,7 @@ void Get_Data(){
 
     acc_x = low_pass_filter(acc_x, acc_x_pre, 0.55f);
     acc_y = low_pass_filter(acc_y, acc_y_pre, 0.55f);
-    acc_z = low_pass_filter(acc_z, acc_z_pre, 1.0f);
+    acc_z = low_pass_filter(acc_z, acc_z_pre, 0.8f);
 
     gravity();
 
@@ -196,14 +223,44 @@ float Complemenraty_Fielter(float acc, float gyro, float prev_comp, float dt){
 }
 
 void stable_check(){
-    float threshold =  0.02f;;
 
-    if(fabs(gyro_x) > threshold| fabs(gyro_y) > threshold
-    | fabs(gyro_z) > threshold){
-        stable = 0;
+    //angle control to move
+
+    // float threshold =  10.0f;
+
+    // if(fabs(pitch_deg) > threshold| fabs(roll_deg) > threshold){
+    //     stable = 0;
+    // }else {
+    //     stable = 1;
+    // }
+
+    float threshold =  0.02f;
+
+    if(fabs(gyro_x) > threshold){
+        stable_x = 0;
     }else {
-        stable = 1;
+        stable_x= 1;
     }
+
+    if(fabs(gyro_y) > threshold){
+        stable_y = 0;
+    }else {
+        stable_y= 1;
+    }
+
+    if(fabs(gyro_z) > threshold){
+        stable_z = 0;
+    }else {
+        stable_z= 1;
+    }
+}
+
+float integrate_composite(float pre, float cur){
+    float result;
+    result = (pre + cur) / 2.0f * dt;
+    //if stable, return current value//
+    //otherwise the controller is moving
+    return result * 20.0f;
 }
 
 float Round_Function(float number) {
@@ -235,7 +292,8 @@ void gravity(){
 
     acc_x = acc_earth.x- gravity.x;
     acc_y = acc_earth.y - gravity.y;
-    acc_z = acc_earth.z - gravity.z;
+    // acc_z = acc_earth.z - gravity.z;
+    acc_z = acc_z - gravity.z;
 
 }
 
