@@ -58,6 +58,7 @@ float cutoff;
 float filter;
 float RC;
 
+
 void StartSendDataTask(void const *argument)
 {   
     // uint8_t index = 0;
@@ -72,7 +73,6 @@ void StartSendDataTask(void const *argument)
         bCursor = 0;
         
         Get_Data();
-        
         stable_check();
         
         v_x_pre = v_x;
@@ -84,8 +84,8 @@ void StartSendDataTask(void const *argument)
         d_y = integrate_composite(v_y_pre, v_y);
 
         v_z_pre = v_z;
-        v_z = integrate_composite(acc_z_pre, acc_z);
-        d_z = integrate_composite(v_z_pre, v_z);
+        v_z += integrate_composite(acc_z_pre, acc_z);
+        d_z = integrate_composite(v_z_pre, v_z) * 5.0f;
 
         if( ! stable_x){
             total_x += d_x;
@@ -188,12 +188,12 @@ void Get_Data(){
     acc_x = Round_Function(acc_x);
     acc_y = INS_accel[INS_ACCEL_Y_ADDRESS_OFFSET];
     acc_y = Round_Function(acc_y);
-    acc_z = INS_accel[INS_ACCEL_Z_ADDRESS_OFFSET];
+    acc_z = INS_accel[INS_ACCEL_Z_ADDRESS_OFFSET] - 9.81f;
     acc_z = Round_Function(acc_z);
 
-    acc_x = low_pass_filter(acc_x, acc_x_pre, 0.55f);
-    acc_y = low_pass_filter(acc_y, acc_y_pre, 0.55f);
-    acc_z = low_pass_filter(acc_z, acc_z_pre, 0.8f);
+    acc_x = low_pass_filter(acc_x, acc_x_pre, 0.6f);
+    acc_y = low_pass_filter(acc_y, acc_y_pre, 0.6f);
+    // acc_z = low_pass_filter(acc_z, acc_z_pre, 0.6f);
 
     gravity();
 
@@ -226,7 +226,7 @@ void stable_check(){
 
     //angle control to move
 
-    // float threshold =  10.0f;
+    float deg_threshold =  5.0f;
 
     // if(fabs(pitch_deg) > threshold| fabs(roll_deg) > threshold){
     //     stable = 0;
@@ -234,21 +234,22 @@ void stable_check(){
     //     stable = 1;
     // }
 
-    float threshold =  0.02f;
+    float gyro_threshold =  0.02f;
+    float acc_threshold =  0.2f;
 
-    if(fabs(gyro_x) > threshold){
+    if(fabs(pitch_deg) > deg_threshold && fabs(acc_x) > acc_threshold){
         stable_x = 0;
     }else {
         stable_x= 1;
     }
 
-    if(fabs(gyro_y) > threshold){
+    if(fabs(roll_deg) > deg_threshold && fabs(acc_y) > acc_threshold ){
         stable_y = 0;
     }else {
         stable_y= 1;
     }
 
-    if(fabs(gyro_z) > threshold){
+    if(fabs(gyro_z) > 0.01f){
         stable_z = 0;
     }else {
         stable_z= 1;
@@ -293,7 +294,7 @@ void gravity(){
     acc_x = acc_earth.x- gravity.x;
     acc_y = acc_earth.y - gravity.y;
     // acc_z = acc_earth.z - gravity.z;
-    acc_z = acc_z - gravity.z;
+    // acc_z = acc_z - gravity.z;
 
 }
 
