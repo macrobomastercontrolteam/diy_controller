@@ -16,7 +16,7 @@ from imu_data import imu #raw data read
 from filters import imu_filter, calculation #filters and calculation
 from crc_verify import CRC #communication security
 
-read = imu()
+read = imu("COM13")
 filters = imu_filter()
 cal = calculation()
 
@@ -33,7 +33,6 @@ def imu_update():
     
 if __name__=='__main__':
     
-    ser = serial.Serial('COM13', 115200)
     send = serial.Serial('COM14', 115200)
     #raspberry pi
     # uart_com = serial.Serial('/dev/ttyUSB1', 115200) #uart connection
@@ -60,8 +59,7 @@ if __name__=='__main__':
     
     timer = True
     while(timer):
-        datahex = ser.read(33)
-        read.DueData(datahex)
+        read.DataRead()
         
         # get acceleration, q
         acc = read.get_acc()
